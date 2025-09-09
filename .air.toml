@@ -1,0 +1,14 @@
+root = "."
+
+[build]
+bin = "./tmp/main"
+cmd = "go build -o ./tmp/main cmd/api/main.go"
+exclude_dir = ["tmp", "vendor"]
+include_ext = ["go"]
+log = "build-errors.log"
+poll = true
+poll_interval = 500
+
+[screen]
+clear_on_rebuild = false
+keep_scroll = true

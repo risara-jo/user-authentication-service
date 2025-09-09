@@ -1,0 +1,26 @@
+# docker/Dockerfile.dev
+FROM golang:1.23-alpine
+
+WORKDIR /app
+
+# Install air for hot reload (Go 1.23 compatible)
+RUN go install github.com/air-verse/air@v1.61.5
+
+# Install postgresql-client for migrations
+RUN apk add --no-cache postgresql-client
+
+# Copy go mod file
+COPY go.mod ./
+# Copy go.sum if it exists
+COPY go.sum ./
+RUN go mod download
+
+# Copy .air.toml config
+COPY .air.toml ./
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE 8080
+
+CMD ["sh", "-c", "until pg_isready -h $DB_HOST -p $DB_PORT; do echo 'Waiting for postgres...'; sleep 2; done; echo 'PostgreSQL is ready'; air -c .air.toml"]
