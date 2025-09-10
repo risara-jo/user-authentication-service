@@ -1,6 +1,6 @@
 # Smart Transit System
 
-A Go + Gin + PostgreSQL Docker development environment for a smart transit system.
+A Go + Gin + PostgreSQL Docker development environment for a smart transit system, including a User & Authentication Service integrated with Asgardeo (OIDC).
 
 ## Project Structure
 
@@ -98,10 +98,17 @@ The project includes a comprehensive Smart Transit System database schema with:
 
 - `GET /health` - Health check
 - `GET /api/v1/ping` - Simple ping endpoint
+- `GET /api/v1/me` - Returns token-derived user claims (requires Bearer token)
 
 ## Environment Variables
 
 See `.env.example` for all available configuration options.
+
+## User & Auth Setup
+
+Follow the step-by-step Asgardeo + API configuration guide:
+
+- `docs/user-auth-service-setup.md`
 
 ## Production Deployment
 

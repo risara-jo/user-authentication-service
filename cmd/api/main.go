@@ -4,11 +4,13 @@ import (
     "log"
     "os"
     "strconv"
+    "strings"
 
     "smart-transit-system/internal/auth"
     "smart-transit-system/internal/config"
     "smart-transit-system/internal/database"
     "smart-transit-system/internal/handlers"
+    mid "smart-transit-system/internal/middleware"
     "smart-transit-system/internal/models"
 
     "github.com/gin-gonic/gin"
@@ -24,58 +26,61 @@ func main() {
 	// Load config
 	cfg := config.Load()
 
-	// Initialize database
-	db, err := database.NewPostgresDB(cfg)
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
-
-	// Test database connection
-	sqlDB, err := db.DB()
-	if err != nil {
-		log.Fatal("Failed to get database instance:", err)
-	}
-
-	if err := sqlDB.Ping(); err != nil {
-		log.Fatal("Failed to ping database:", err)
-	}
-
-    log.Println("Successfully connected to database")
-
-    // Auto-migrate minimal user-related tables
-    if err := db.AutoMigrate(&models.User{}, &models.Organization{}, &models.UserOrgMembership{}, &models.UserAudit{}); err != nil {
-        log.Fatalf("Failed to auto-migrate database: %v", err)
+    // Initialize database (non-fatal so health endpoint still works)
+    db, err := database.NewPostgresDB(cfg)
+    if err != nil {
+        log.Printf("WARN: DB connect failed: %v", err)
+    } else {
+        sqlDB, err := db.DB()
+        if err != nil {
+            log.Printf("WARN: DB instance error: %v", err)
+        } else if err := sqlDB.Ping(); err != nil {
+            log.Printf("WARN: DB ping failed: %v", err)
+        } else {
+            log.Println("Successfully connected to database")
+            if err := db.AutoMigrate(&models.User{}, &models.Organization{}, &models.UserOrgMembership{}, &models.UserAudit{}); err != nil {
+                log.Printf("WARN: Auto-migrate failed: %v", err)
+            }
+        }
     }
 
     // Setup Gin router
     r := gin.Default()
+    // CORS for SPA calls
+    r.Use(mid.CORS())
 
-	// Health check endpoint
-	r.GET("/health", handlers.HealthCheck)
+    // Health check endpoint
+    r.GET("/health", handlers.HealthCheck)
+    r.GET("/health2", handlers.HealthCheck)
 
-    // API routes
-    api := r.Group("/api/v1")
-    {
+	// API routes
+	api := r.Group("/api/v1")
+	{
         api.GET("/ping", func(c *gin.Context) {
             c.JSON(200, gin.H{"message": "pong"})
         })
 
-        // Auth middleware group (protects endpoints below)
-        if cfg.AsgardeoIssuer != "" {
-            cacheMin, _ := strconv.Atoi(cfg.JWKSCacheMinutes)
-            authenticator, err := auth.New(cfg.AsgardeoIssuer, cfg.AsgardeoAudience, cacheMin)
-            if err != nil {
-                log.Printf("WARN: auth middleware disabled (issuer setup failed): %v", err)
-            } else {
-                protected := api.Group("")
-                protected.Use(authenticator.Middleware())
-                // /me endpoint requires basic scope (openid or profile). We'll not enforce a scope hard here.
-                protected.GET("/me", handlers.Me)
-            }
-        } else {
-            log.Printf("WARN: ASGARDEO_ISSUER not set; auth endpoints disabled")
-        }
-    }
+        // Auth helper for SPA: returns authorize URL template
+        api.GET("/auth/login", handlers.AuthLogin)
+        // Optional: redirect helper when given PKCE params
+        api.GET("/auth/authorize", handlers.AuthAuthorize)
+
+		// Auth middleware group (protects endpoints below)
+		if cfg.AsgardeoIssuer != "" {
+			cacheMin, _ := strconv.Atoi(cfg.JWKSCacheMinutes)
+			authenticator, err := auth.New(cfg.AsgardeoIssuer, cfg.AsgardeoAudience, cacheMin)
+			if err != nil {
+				log.Printf("WARN: auth middleware disabled (issuer setup failed): %v", err)
+			} else {
+				protected := api.Group("")
+				protected.Use(authenticator.Middleware())
+				// /me endpoint requires basic scope (openid or profile). We'll not enforce a scope hard here.
+				protected.GET("/me", handlers.Me)
+			}
+		} else {
+			log.Printf("WARN: ASGARDEO_ISSUER not set; auth endpoints disabled")
+		}
+	}
 
 	// Start server
 	port := os.Getenv("PORT")
@@ -90,3 +95,6 @@ func main() {
 		log.Fatal("Failed to start server:", err)
 	}
 }
+
+// retain strings import usage
+var _ = strings.TrimSpace
