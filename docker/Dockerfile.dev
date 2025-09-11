@@ -7,7 +7,7 @@ WORKDIR /app
 RUN go install github.com/air-verse/air@v1.61.5
 
 # Install postgresql-client for migrations
-RUN apk add --no-cache postgresql-client
+RUN apk add --no-cache postgresql-client ca-certificates && update-ca-certificates
 
 # Copy go mod file
 COPY go.mod ./

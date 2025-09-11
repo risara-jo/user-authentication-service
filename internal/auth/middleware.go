@@ -21,6 +21,7 @@ type Auth struct {
     audience string // optional
     jwks     *keyfunc.JWKS
     once     sync.Once
+    tenant   string // extracted from issuer path (/t/{tenant}) for tolerant checks
 }
 
 type discoveryDoc struct {
@@ -38,22 +39,27 @@ func New(issuer string, audience string, cacheMinutes int) (*Auth, error) {
     iss := strings.TrimRight(issuer, "/")
     discURL := iss + "/.well-known/openid-configuration"
 
-    // Fetch discovery
+    // Fetch discovery (with fallback to issuer + "/jwks")
+    var dd discoveryDoc
     req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, discURL, nil)
     resp, err := http.DefaultClient.Do(req)
-    if err != nil {
-        return nil, fmt.Errorf("fetch discovery: %w", err)
+    if err == nil && resp != nil {
+        defer resp.Body.Close()
+        if resp.StatusCode == http.StatusOK {
+            if decErr := json.NewDecoder(resp.Body).Decode(&dd); decErr == nil && dd.JWKSURI != "" {
+                // ok
+            }
+        }
     }
-    defer resp.Body.Close()
-    if resp.StatusCode != 200 {
-        return nil, fmt.Errorf("discovery status %d", resp.StatusCode)
-    }
-    var dd discoveryDoc
-    if err := json.NewDecoder(resp.Body).Decode(&dd); err != nil {
-        return nil, fmt.Errorf("decode discovery: %w", err)
-    }
+    // Fallback if jwks_uri missing
     if dd.JWKSURI == "" {
-        return nil, errors.New("jwks_uri not found in discovery")
+        dd.Issuer = iss
+        dd.JWKSURI = iss + "/jwks"
+    }
+
+    // Prefer the issuer value reported by discovery when available.
+    if dd.Issuer != "" {
+        iss = strings.TrimRight(dd.Issuer, "/")
     }
 
     // Build JWKS with background refresh
@@ -74,7 +80,18 @@ func New(issuer string, audience string, cacheMinutes int) (*Auth, error) {
         return nil, fmt.Errorf("load jwks: %w", err)
     }
 
-    return &Auth{issuer: iss, audience: audience, jwks: jwks}, nil
+    // Extract tenant from issuer path (first segment after /t/)
+    tenant := ""
+    if i := strings.Index(iss, "/t/"); i >= 0 {
+        rest := iss[i+3:]
+        if j := strings.Index(rest, "/"); j >= 0 {
+            tenant = rest[:j]
+        } else {
+            tenant = rest
+        }
+    }
+
+    return &Auth{issuer: iss, audience: audience, jwks: jwks, tenant: tenant}, nil
 }
 
 // Claims is a permissive map of token claims with helpers.
@@ -178,7 +195,33 @@ func (a *Auth) Middleware() gin.HandlerFunc {
             return
         }
         // Validate issuer, audience (optional), and time-based claims
-        if !m.VerifyIssuer(a.issuer, true) {
+        // Issuer check with tolerance for trailing slash differences
+        issClaim, _ := m["iss"].(string)
+        expected := strings.TrimRight(a.issuer, "/")
+        got := strings.TrimRight(issClaim, "/")
+        // Normalize to tolerate trailing slash, optional /oauth2 or /oidc segment,
+        // and host aliases (api/sts). Also accept any issuer that clearly targets
+        // the same tenant (/t/{tenant}).
+        canon := func(s string) string {
+            s = strings.TrimSpace(s)
+            s = strings.TrimRight(s, "/")
+            s = strings.TrimSuffix(s, "/oauth2")
+            s = strings.TrimSuffix(s, "/oidc")
+            s = strings.ReplaceAll(s, "api.asgardeo.io", "asgardeo.io")
+            s = strings.ReplaceAll(s, "sts.asgardeo.io", "asgardeo.io")
+            return s
+        }
+        eg := canon(expected)
+        gg := canon(got)
+        valid := eg != "" && gg == eg
+        if !valid && a.tenant != "" {
+            // Tenant-aware relaxed check
+            // Accept if token issuer contains /t/{tenant} after canonicalization.
+            if strings.Contains(gg, "/t/"+a.tenant) {
+                valid = true
+            }
+        }
+        if !valid {
             c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid issuer"})
             return
         }

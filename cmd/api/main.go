@@ -53,9 +53,9 @@ func main() {
     r.GET("/health", handlers.HealthCheck)
     r.GET("/health2", handlers.HealthCheck)
 
-	// API routes
-	api := r.Group("/api/v1")
-	{
+    // API routes
+    api := r.Group("/api/v1")
+    {
         api.GET("/ping", func(c *gin.Context) {
             c.JSON(200, gin.H{"message": "pong"})
         })
@@ -65,22 +65,31 @@ func main() {
         // Optional: redirect helper when given PKCE params
         api.GET("/auth/authorize", handlers.AuthAuthorize)
 
-		// Auth middleware group (protects endpoints below)
-		if cfg.AsgardeoIssuer != "" {
-			cacheMin, _ := strconv.Atoi(cfg.JWKSCacheMinutes)
-			authenticator, err := auth.New(cfg.AsgardeoIssuer, cfg.AsgardeoAudience, cacheMin)
-			if err != nil {
-				log.Printf("WARN: auth middleware disabled (issuer setup failed): %v", err)
-			} else {
-				protected := api.Group("")
-				protected.Use(authenticator.Middleware())
-				// /me endpoint requires basic scope (openid or profile). We'll not enforce a scope hard here.
-				protected.GET("/me", handlers.Me)
-			}
-		} else {
-			log.Printf("WARN: ASGARDEO_ISSUER not set; auth endpoints disabled")
-		}
-	}
+        // Auth middleware group (protects /me) or fallback if misconfigured
+        authReady := false
+        var authErrMsg string
+        if cfg.AsgardeoIssuer != "" {
+            cacheMin, _ := strconv.Atoi(cfg.JWKSCacheMinutes)
+            authenticator, err := auth.New(cfg.AsgardeoIssuer, cfg.AsgardeoAudience, cacheMin)
+            if err != nil {
+                log.Printf("WARN: auth setup failed; /me will return 503: %v", err)
+                api.GET("/me", handlers.AuthNotConfigured)
+                authErrMsg = err.Error()
+            } else {
+                protected := api.Group("")
+                protected.Use(authenticator.Middleware())
+                protected.GET("/me", handlers.Me)
+                authReady = true
+            }
+        } else {
+            log.Printf("WARN: ASGARDEO_ISSUER not set; /me will return 503")
+            api.GET("/me", handlers.AuthNotConfigured)
+            authErrMsg = "ASGARDEO_ISSUER not set"
+        }
+
+        // Readiness endpoint shows auth configuration detected at startup
+        api.GET("/ready", handlers.Ready(authReady, cfg.AsgardeoIssuer, authErrMsg))
+    }
 
 	// Start server
 	port := os.Getenv("PORT")
