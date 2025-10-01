@@ -1,14 +1,11 @@
 package handlers
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
+
+	"smart-transit-system/internal/httpx"
 )
 
 func HealthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "healthy",
-		"message": "Service is running",
-	})
+	httpx.RespondSuccess(c, 200, gin.H{"status": "healthy"}, "service is running")
 }

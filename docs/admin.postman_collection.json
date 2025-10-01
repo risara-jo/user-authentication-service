@@ -1,0 +1,152 @@
+{
+  "info": {
+    "name": "User Authentication Service Admin APIs",
+    "description": "Sample requests for Smart Transit Platform admin endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "List Roles",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/roles",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "roles"]
+        }
+      }
+    },
+    {
+      "name": "List Profiles",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/profiles?page=1&limit=20",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "profiles"],
+          "query": [
+            {"key": "page", "value": "1"},
+            {"key": "limit", "value": "20"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Admin User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"new.admin@example.com\",\n  \"name\": \"New Admin\",\n  \"roles\": [\"admin\"],\n  \"company_id\": \"company-001\",\n  \"temporary_password\": \"Welcome#123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/admin/users",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "admin", "users"]
+        }
+      }
+    },
+    {
+      "name": "Update User Profile",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Updated Name\",\n  \"primary_role\": \"company_owner\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/admin/users/{{user_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "admin", "users", "{{user_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Replace User Roles",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"roles\": [\"admin\", \"company_owner\"]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/admin/users/{{user_id}}/roles",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "admin", "users", "{{user_id}}", "roles"]
+        }
+      }
+    },
+    {
+      "name": "Update User Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"disabled\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/admin/users/{{user_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "admin", "users", "{{user_id}}", "status"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "access_token", "value": "" },
+    { "key": "user_id", "value": "" }
+  ]
+}

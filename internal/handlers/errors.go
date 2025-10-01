@@ -1,16 +1,11 @@
 package handlers
 
 import (
-    "net/http"
-
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
+	"smart-transit-system/internal/httpx"
 )
 
 // AuthNotConfigured responds when OIDC is not correctly configured at startup.
 func AuthNotConfigured(c *gin.Context) {
-    c.JSON(http.StatusServiceUnavailable, gin.H{
-        "error": "auth_not_configured",
-        "message": "Asgardeo OIDC is not configured or discovery failed. Ensure ASGARDEO_ISSUER is set and reachable.",
-    })
+	httpx.RespondError(c, 503, "auth_not_configured", "Asgardeo OIDC is not configured or discovery failed. Ensure ASGARDEO_ISSUER is set and reachable.", nil)
 }
-
